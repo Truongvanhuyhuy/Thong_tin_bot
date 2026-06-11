@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BOT 18+ HOÀN CHỈNH - SAO CHÉP TRỰC TIẾP
-Dán toàn bộ file này vào app.py trên Render
+BOT 18+ HOÀN CHỈNH - ĐÃ SỬA ĐỂ CHẠY VỚI GUNICORN
 """
 
 import os
@@ -180,23 +179,41 @@ async def webhook():
         logger.error(f"Webhook error: {e}")
         return "Error", 500
 
-async def setup_webhook():
-    if RENDER_URL:
-        webhook_url = f"{RENDER_URL}/{TOKEN}"
-        try:
-            await application.bot.set_webhook(webhook_url, drop_pending_updates=True, max_connections=10)
-            logger.info(f"Webhook OK: {webhook_url}")
-        except Exception as e:
-            logger.error(f"Loi set webhook: {e}")
-    else:
-        logger.warning("Thieu RENDER_EXTERNAL_URL")
+# =========================================================
+# PHẦN QUAN TRỌNG: KHỞI TẠO BOT TRƯỚC KHI GUNICORN CHẠY
+# =========================================================
+# Phải chạy setup webhook TRƯỚC KHI Gunicorn load app
+# Dùng before_first_request hoặc chạy trực tiếp
 
-async def main():
-    await application.initialize()
-    await setup_webhook()
-    await application.start()
-    logger.info(f"Bot chay port {PORT}")
-    app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
+def setup_bot():
+    """Thiết lập bot trước khi server chạy"""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    
+    async def init():
+        await application.initialize()
+        await application.start()
+        if RENDER_URL:
+            webhook_url = f"{RENDER_URL}/{TOKEN}"
+            try:
+                await application.bot.set_webhook(webhook_url, drop_pending_updates=True, max_connections=10)
+                logger.info(f"Webhook OK: {webhook_url}")
+            except Exception as e:
+                logger.error(f"Loi set webhook: {e}")
+        else:
+            logger.warning("Thieu RENDER_EXTERNAL_URL")
+        logger.info("Bot da san sang!")
+    
+    loop.run_until_complete(init())
+    return loop
 
+# Chạy setup ngay khi Gunicorn import file này
+setup_bot()
+
+# =========================================================
+# GUNICORN SẼ TỰ ĐỘNG CHẠY: gunicorn main:app
+# Không cần app.run() vì Gunicorn làm việc đó
+# =========================================================
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Chỉ chạy nếu gọi trực tiếp python app.py (dev mode)
+    app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
