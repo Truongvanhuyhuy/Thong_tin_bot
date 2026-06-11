@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BOT TELEGRAM ĐA NĂNG - 24/7 TRÊN RENDER
+BOT TELEGRAM ĐA NĂNG - 24/7
 """
 
 import os
@@ -17,11 +17,14 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Cont
 # ====================== CẤU HÌNH ======================
 TOKEN = os.environ.get("BOT_TOKEN")
 if not TOKEN:
-    raise ValueError("❌ BOT_TOKEN chưa được thiết lập trong Environment Variables!")
+    raise ValueError("❌ BOT_TOKEN chưa được thiết lập!")
 
 app = Flask(__name__)
 
-# ====================== FLASK WEBHOOK ======================
+# ====================== KHỞI TẠO BOT TRƯỚC ======================
+application = Application.builder().token(TOKEN).build()
+
+# ====================== FLASK ======================
 @app.route("/")
 def home():
     return "🤖 Bot Telegram Đa Năng đang chạy 24/7!"
@@ -35,10 +38,7 @@ def webhook():
         print(f"Webhook error: {e}")
     return "OK", 200
 
-# ====================== KHỞI TẠO APPLICATION ======================
-application = Application.builder().token(TOKEN).build()
-
-# ====================== TIN TỨC ======================
+# ====================== CÁC HÀM HỖ TRỢ ======================
 def crawl_news():
     try:
         r = requests.get("https://vnexpress.net/rss/tin-moi-nhat.rss", timeout=10)
@@ -48,7 +48,6 @@ def crawl_news():
     except:
         return ["❌ Không lấy được tin tức."]
 
-# ====================== THỜI TIẾT ======================
 def get_weather(city="Hà Nội"):
     try:
         geo = requests.get(f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=vi", timeout=8).json()
@@ -56,62 +55,9 @@ def get_weather(city="Hà Nội"):
             return "Không tìm thấy thành phố."
         loc = geo["results"][0]
         lat, lon = loc["latitude"], loc["longitude"]
-        
         data = requests.get(
             f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m&timezone=Asia/Ho_Chi_Minh",
             timeout=8
         ).json()
         temp = data["current"]["temperature_2m"]
-        return f"🌤️ **{loc['name']}**\nNhiệt độ: **{temp}°C**"
-    except:
-        return "❌ Lỗi lấy thời tiết."
-
-# ====================== COMMANDS ======================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("📰 Tin tức", callback_data="news")],
-        [InlineKeyboardButton("🌤️ Thời tiết", callback_data="weather")],
-        [InlineKeyboardButton("🌐 Dịch", callback_data="translate")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🤖 **Bot Đa Năng**\nChọn chức năng:", reply_markup=reply_markup, parse_mode="Markdown")
-
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    if query.data == "news":
-        news = crawl_news()
-        for n in news:
-            await query.message.reply_text(n)
-    elif query.data == "weather":
-        await query.message.reply_text("Dùng lệnh: `/weather Hà Nội`")
-    elif query.data == "translate":
-        await query.message.reply_text("Dùng: `/dich Xin chào`")
-
-async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    city = " ".join(context.args) if context.args else "Hà Nội"
-    result = get_weather(city)
-    await update.message.reply_text(result)
-
-async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("Cách dùng: `/dich Xin chào`")
-        return
-    text = " ".join(context.args)
-    try:
-        translated = GoogleTranslator(source='auto', target='vi').translate(text)
-        await update.message.reply_text(f"🌐 **Dịch sang tiếng Việt:**\n{translated}")
-    except:
-        await update.message.reply_text("❌ Lỗi dịch văn bản.")
-
-# Đăng ký handlers
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("weather", weather_command))
-application.add_handler(CommandHandler("dich", translate_command))
-application.add_handler(CallbackQueryHandler(button_handler))
-
-# ====================== CHẠY ======================
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    print("🚀 Bot Telegram đang khởi động...")
-    app.run(host="0.0.0.0", port=port)
+        return f"🌤️ **{loc['name']}
