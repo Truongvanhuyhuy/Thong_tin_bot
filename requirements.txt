@@ -1,9 +1,7 @@
-python-telegram-bot==20.7
-requests==2.31.0
-beautifulsoup4==4.12.2
-lxml==4.9.3
-googletrans==4.0.0rc1
+python-telegram-bot==20.8
+requests==2.32.3
+beautifulsoup4==4.12.3
+lxml==5.2.2
 deep-translator==1.11.4
-selenium==4.15.0
-flask==3.0.0
-gunicorn==21.2.0
+flask==3.0.3
+gunicorn==23.0.0
