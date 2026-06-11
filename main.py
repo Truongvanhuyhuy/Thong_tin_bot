@@ -1,63 +1,77 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BOT TELEGRAM ĐA NĂNG - 24/7
+BOT 18+ - PHIÊN BẢN TEST
 """
 
 import os
-import threading
-import time
+import tempfile
+import zipfile
 import requests
 from flask import Flask, request
-from bs4 import BeautifulSoup
-from deep_translator import GoogleTranslator
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, ContextTypes
 
-# ====================== CẤU HÌNH ======================
 TOKEN = os.environ.get("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("❌ BOT_TOKEN chưa được thiết lập!")
 
 app = Flask(__name__)
-
-# ====================== KHỞI TẠO BOT TRƯỚC ======================
 application = Application.builder().token(TOKEN).build()
 
-# ====================== FLASK ======================
 @app.route("/")
 def home():
-    return "🤖 Bot Telegram Đa Năng đang chạy 24/7!"
+    return "🤖 Bot 18+ Test đang chạy!"
 
 @app.route(f"/{TOKEN}", methods=["POST"])
 def webhook():
     try:
         update = Update.de_json(request.get_json(force=True), application.bot)
         application.process_update(update)
-    except Exception as e:
-        print(f"Webhook error: {e}")
+    except:
+        pass
     return "OK", 200
 
-# ====================== CÁC HÀM HỖ TRỢ ======================
-def crawl_news():
-    try:
-        r = requests.get("https://vnexpress.net/rss/tin-moi-nhat.rss", timeout=10)
-        soup = BeautifulSoup(r.content, "xml")
-        items = soup.find_all("item")[:5]
-        return [f"📰 {item.find('title').text}\n🔗 {item.find('link').text}" for item in items]
-    except:
-        return ["❌ Không lấy được tin tức."]
+# Danh sách link ảnh 18+ mẫu (có thể thay bằng nguồn crawl sau)
+IMAGE_URLS = [
+    "https://picsum.photos/id/1015/800/600",  # Thay bằng link thật sau
+    "https://picsum.photos/id/1027/800/600",
+    "https://picsum.photos/id/106/800/600",
+    "https://picsum.photos/id/133/800/600",
+]
 
-def get_weather(city="Hà Nội"):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🔞 **Bot 18+ Test**\nGửi lệnh /18plus để nhận ảnh.")
+
+async def get_18plus(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⏳ Đang chuẩn bị gói ảnh 18+...")
+    
+    # Gửi vài ảnh trực tiếp
+    for url in IMAGE_URLS[:4]:
+        try:
+            await update.message.reply_photo(photo=url)
+        except:
+            await update.message.reply_text(f"Ảnh: {url}")
+    
+    # Tạo file ZIP
     try:
-        geo = requests.get(f"https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=vi", timeout=8).json()
-        if not geo.get("results"):
-            return "Không tìm thấy thành phố."
-        loc = geo["results"][0]
-        lat, lon = loc["latitude"], loc["longitude"]
-        data = requests.get(
-            f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m&timezone=Asia/Ho_Chi_Minh",
-            timeout=8
-        ).json()
-        temp = data["current"]["temperature_2m"]
-        return f"🌤️ **{loc['name']}
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
+            with zipfile.ZipFile(tmp.name, 'w') as zf:
+                for i, url in enumerate(IMAGE_URLS):
+                    try:
+                        r = requests.get(url, timeout=10)
+                        zf.writestr(f"image_{i+1}.jpg", r.content)
+                    except:
+                        pass
+            await update.message.reply_document(document=open(tmp.name, 'rb'), filename="18plus_images.zip")
+    except:
+        await update.message.reply_text("✅ Đã gửi ảnh. ZIP lỗi nhỏ.")
+
+# Đăng ký lệnh
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("18plus", get_18plus))
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    print("🚀 Bot 18+ Test khởi động...")
+    app.run(host="0.0.0.0", port=port)
