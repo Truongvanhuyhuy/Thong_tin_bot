@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BOT 18+ HOÀN CHỈNH - ĐÃ SỬA ĐỂ CHẠY VỚI GUNICORN
+BOT 18+ HOÀN CHỈNH - ĐÃ SỬA LỖI WEBHOOK 500
 """
 
 import os
 import sys
 import asyncio
 import logging
+import threading
 from io import BytesIO
 import zipfile
 import requests
@@ -27,7 +28,7 @@ def home():
 
 @app.route("/health")
 def health():
-    return {"status": "OK", "bot": "18+", "version": "2.0"}
+    return {"status": "OK", "bot": "18+", "version": "3.0"}
 
 TOKEN = os.environ.get("BOT_TOKEN")
 if not TOKEN:
@@ -168,27 +169,32 @@ application.add_handler(CommandHandler("cosplay", get_cosplay))
 application.add_handler(CommandHandler("all", get_all_zip))
 application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
 
+# =========================================================
+# QUAN TRỌNG: TẠO EVENT LOOP TOÀN CỤC KHÔNG BAO GIỜ ĐÓNG
+# =========================================================
+main_loop = asyncio.new_event_loop()
+asyncio.set_event_loop(main_loop)
+
 @app.route(f"/{TOKEN}", methods=["POST"])
-async def webhook():
+def webhook():
+    """Xử lý webhook KHÔNG async - chạy trong main_loop"""
     try:
         data = request.get_json(force=True)
         update = Update.de_json(data, application.bot)
-        await application.process_update(update)
+        # Chạy async process trong main_loop an toàn
+        future = asyncio.run_coroutine_threadsafe(
+            application.process_update(update), 
+            main_loop
+        )
+        future.result(timeout=30)  # Đợi xử lý xong
         return "OK", 200
     except Exception as e:
-        logger.error(f"Webhook error: {e}")
+        logger.error(f"Webhook error: {str(e)}")
         return "Error", 500
 
-# =========================================================
-# PHẦN QUAN TRỌNG: KHỞI TẠO BOT TRƯỚC KHI GUNICORN CHẠY
-# =========================================================
-# Phải chạy setup webhook TRƯỚC KHI Gunicorn load app
-# Dùng before_first_request hoặc chạy trực tiếp
-
-def setup_bot():
-    """Thiết lập bot trước khi server chạy"""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
+def run_bot_in_thread():
+    """Chạy bot trong thread riêng với event loop riêng"""
+    asyncio.set_event_loop(main_loop)
     
     async def init():
         await application.initialize()
@@ -204,16 +210,13 @@ def setup_bot():
             logger.warning("Thieu RENDER_EXTERNAL_URL")
         logger.info("Bot da san sang!")
     
-    loop.run_until_complete(init())
-    return loop
+    main_loop.run_until_complete(init())
+    # GIỮ EVENT LOOP MÃI MÃI - KHÔNG ĐÓNG
+    main_loop.run_forever()
 
-# Chạy setup ngay khi Gunicorn import file này
-setup_bot()
+# Khởi động bot trong thread riêng
+bot_thread = threading.Thread(target=run_bot_in_thread, daemon=True)
+bot_thread.start()
 
-# =========================================================
-# GUNICORN SẼ TỰ ĐỘNG CHẠY: gunicorn main:app
-# Không cần app.run() vì Gunicorn làm việc đó
-# =========================================================
 if __name__ == "__main__":
-    # Chỉ chạy nếu gọi trực tiếp python app.py (dev mode)
     app.run(host="0.0.0.0", port=PORT, debug=False, use_reloader=False)
